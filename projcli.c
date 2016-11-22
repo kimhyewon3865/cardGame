@@ -4,14 +4,16 @@
 #include <string.h>
 
 void gotoxy(int x,int y);
+void printTable();
+
+char result[16] = {'a','a','b','b','c','c','d','d','e','e','f','f','g','g','h','h'};
 
 
 int main() {
-	char result[16] = {'a','a','b','b','c','c','d','d','e','e','f','f','g','g','h','h'};
+	// char result[16] = {'a','a','b','b','c','c','d','d','e','e','f','f','g','g','h','h'};
 	char temp;
-	int i,j=3,k=3;
+	int i;
 	int randNumber;
-	char mesg[]="Just a string";		/* message to be appeared on the screen */
 
 	srand((unsigned)time(NULL));
 
@@ -21,29 +23,28 @@ int main() {
 		result[i] = result[randNumber];
 		result[randNumber] = temp;
 	}
+	printTable();
+
+}
+
+void gotoxy(int x,int y)
+{
+	printf("%c[%d;%df",0x1B,y,x);
+}
+
+void printTable() {
+	int i, j = 3, k = 3;
 
 	for (int i = 0; i < 16; ++i)
 	{
 		gotoxy(j,k); //reposition cursor
 		printf("%c",result[i]);
-		j=j+2;
+		j = j + 2;
 		if ((i+1)%4 == 0)
 		{
 			printf("\n");
-			k = k+2;
-			j=3;
+			k = k + 2;
+			j= 3;
 		}
 	}
-
-
 }
-
-//gotoxy function
-void gotoxy(int x,int y)
-{
-printf("%c[%d;%df",0x1B,y,x);
-}
-// int main() {
-// gotoxy(25,2); //reposition cursor
-// printf("hello world"); //display text
-// }
