@@ -2,15 +2,91 @@
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
+#define MAXLINE 511
+#define NAME_LEN 20
+
+int tcp_connect(int af, char *servip, unsigned short port);
+void errquit(char *mesg) { perror(mesg); exit(1); }
 
 void gotoxy(int x,int y);
 void printTable();
+char * inputPoint();
+void makeCardTable();
 
 char result[16] = {'a','a','b','b','c','c','d','d','e','e','f','f','g','g','h','h'};
+int cardState[16] = {0};
 
+int main(int argc, char * argv[]) {
+	char bufall[MAXLINE + NAME_LEN], *bufmsg;
+	int maxfdp1, s, namelen;
+	fd_set read_fds;
 
-int main() {
-	// char result[16] = {'a','a','b','b','c','c','d','d','e','e','f','f','g','g','h','h'};
+	if(argc != 4) {
+		printf("사용법: %s  server_ip port name \n", argv[0]);
+		exit(0);
+	}
+	puts("a");
+	sprintf(bufall, "[%s] : ", argv[3]);
+		puts("b");
+
+	namelen = strlen(bufall);
+		puts("c");
+
+	bufmsg = bufall + namelen;
+	puts("d");
+
+	s = tcp_connect(AF_INET, argv[1], atoi(argv[2]));
+	puts("e");
+
+	if(s == -1) 
+		errquit("tcp_connet fail");
+
+	puts("서버에 접속되었습니다.");
+	maxfdp1 = s + 1;
+	FD_ZERO(&read_fds);
+
+	while(1) {
+		FD_SET(0, &read_fds);
+		FD_SET(s, &read_fds);
+		if(select(maxfdp1, &read_fds, NULL, NULL, NULL) < 0 )
+			errquit("select fail");
+		if(FD_ISSET(s, &read_fds)) {
+			int nbyte;
+			if( (nbyte = recv(s, bufmsg, MAXLINE, 0)) > 0) {
+				bufmsg[nbyte] = 0;
+				printf("%s \n", bufmsg);
+			}
+		}
+
+		if(FD_ISSET(0, &read_fds)) {
+			if(fgets(bufmsg, MAXLINE, stdin)) {
+			//bufmsg = inputPoint();
+				if(send(s, bufall, namelen+strlen(bufmsg),0)<0)
+					puts("Error : Write error on socket.");
+				// if(strstr(bufmsg, EXIT_STRING) != NULL) {
+				// 	puts("Good bye.");
+				// 	close(s);
+				// 	exit(0);
+				// }
+			}
+		}
+	}//end of while
+
+}
+
+void gotoxy(int x,int y)
+{
+	printf("%c[%d;%df",0x1B,y,x);
+}
+
+void makeCardTable() {
 	char temp;
 	int i;
 	int randNumber;
@@ -23,28 +99,64 @@ int main() {
 		result[i] = result[randNumber];
 		result[randNumber] = temp;
 	}
-	printTable();
-
 }
 
-void gotoxy(int x,int y)
-{
-	printf("%c[%d;%df",0x1B,y,x);
-}
 
 void printTable() {
-	int i, j = 3, k = 3;
+	int i, j = 3, k = 20;
 
 	for (int i = 0; i < 16; ++i)
 	{
 		gotoxy(j,k); //reposition cursor
-		printf("%c",result[i]);
-		j = j + 2;
-		if ((i+1)%4 == 0)
-		{
-			printf("\n");
-			k = k + 2;
-			j= 3;
-		}
+		if(cardState[i] != 0) {
+			printf("%c",result[i]);
+		} else {
+			printf("?");
+		}	
+			j = j + 2;
+			if ((i+1)%4 == 0)
+			{
+				printf("\n");
+				k = k + 2;
+				j= 3;
+			}
 	}
+}
+
+char * inputPoint() {
+	char *bufmsg;
+	int x1,y1,x2,y2;
+	gotoxy(2,30);
+	printf("첫번째카드 x 입력 : ");
+	scanf("%d",&x1);
+	*bufmsg = x1;
+	printf("첫번째카드 y 입력 : ");
+	scanf("%d",&y1);
+	*bufmsg += y1;
+	printf("두번째카드 x 입력 : ");
+	scanf("%d",&x2);
+	*bufmsg += x2;
+	printf("두번째카드 x 입력 : ");
+	scanf("%d",&y2);
+	*bufmsg += y2;
+
+	return bufmsg;
+}
+
+int tcp_connect(int af, char *servip, unsigned short port) {
+	struct sockaddr_in servaddr; 
+	int s;
+	//소켓 생성
+	if( (s = socket(af, SOCK_STREAM, 0)) < 0 )
+		return -1;
+
+	bzero( (char *)&servaddr, sizeof(servaddr));
+	servaddr.sin_family = af;
+	inet_pton(AF_INET, servip, &servaddr.sin_addr);
+	servaddr.sin_port = htons(port);
+
+	if(connect(s, (struct sockaddr *)&servaddr, sizeof(servaddr))<0)
+		return -1;
+
+	return s;
 }
