@@ -27,15 +27,17 @@
 #define COMMAND_FINISH "finish"
 
 void waitInput(int socket, int maxfdp1, fd_set *read_fds);
-char* readDataFromServer(int socket);
+void readDataFromServer(int socket, char *bufmsg);
 void processData(char*);
 void parseData(char **result, char *data);
 void splitString(char *result[], char string[], char delimiter[]);
 void processGameInfo(char *result[]);
+void processKeyboardInput(int, char *);
 
 int myTurnNumber = 0;
 int nowTurnNumber = 0;
 int gameState = 0;
+char *command = "/";
 
 /////////////////////////
 
@@ -61,8 +63,8 @@ const char *GAME_STARAT_STRING = "start";
 
 
 int main(int argc, char * argv[]) {
-     char bufall[MAXLINE + NAME_LEN], *bufmsg;
-    int maxfdp1, socket, namelen;
+    char bufmsg[MAXLINE];
+    int maxfdp1, socket;
     fd_set read_fds;
     
 //    if(argc != 4) {
@@ -70,16 +72,10 @@ int main(int argc, char * argv[]) {
 //        exit(0);
 //    }
     
+    // set server info
     argv[1] = "125.209.199.157";
     argv[2] = "80";
     argv[3] = "뿅알";
-    
-    sprintf(bufall, "[%s] : ", argv[3]);
-    
-    namelen = strlen(bufall);
-    
-    bufmsg = bufall + namelen;
-
     
     // open socket
     socket = tcp_connect(AF_INET, argv[1], atoi(argv[2]));
@@ -90,102 +86,20 @@ int main(int argc, char * argv[]) {
     maxfdp1 = socket + 1;
     FD_ZERO(&read_fds);
     
-//    while (1) {
-//        
-//        //printf("wait...");
-//        
-//        waitInput(socket, maxfdp1, &read_fds);
-//        
-//        if (FD_ISSET(socket, &read_fds)) {
-//            char *dataFromServer = readDataFromServer(socket);
-//            if (dataFromServer != NULL) {
-//                printf("data: %s\n", dataFromServer);
-//                processData(dataFromServer);
-//            }
-//            
-//        } else if (FD_ISSET(0, &read_fds)) {
-//            char *bufmsg;
-//            if (fgets(bufmsg, MAXLINE, stdin)) {
-//                printf("your input is %s\n",bufmsg);
-//            }
-//            
-//            
-//            
-//            // TODO: processKeyboardInput()
-//        }
-//    }
-    
-    
-    
-    
-    
-    
-    //////////////////////////////////////////
-    
-//    sprintf(bufall, "[%s] : ", argv[3]);
-//    
-//    namelen = strlen(bufall);
-//    
-//    bufmsg = bufall + namelen;
-    
-//    socket = tcp_connect(AF_INET, argv[1], atoi(argv[2]));
-    
-//    if(socket == -1)
-//        errquit("tcp_connet fail");
-    
-//    puts("서버에 접속되었습니다.");
-//    maxfdp1 = socket + 1;
-//    FD_ZERO(&read_fds);
-    
-    while(1) {
+    // communicate with server
+    while (1) {
+        waitInput(socket, maxfdp1, &read_fds);
         
-        FD_SET(0, &read_fds);
-        FD_SET(socket, &read_fds);
-
-        if(select(maxfdp1, &read_fds, NULL, NULL, NULL) < 0 ) {
-            errquit("select fail");
-        }
-        
-        if(FD_ISSET(socket, &read_fds)) {
-            int nbyte;
-            if( (nbyte = recv(socket, bufmsg, MAXLINE, 0)) > 0) {
-                bufmsg[nbyte] = 0;
-                result = bufmsg;
-                //printTable();
-                processData(bufmsg);
-
-                printf("%s \n", bufmsg);
-            }
-        }
-        
-        if(FD_ISSET(0, &read_fds)) {
-            printf("x1, y1, x2, y2 입력:\n");
-            if(fgets(bufmsg, MAXLINE, stdin)) {
-                if (gameState == 1) { //게임진행중
-                    if (myTurnNumber == nowTurnNumber) {
-                        if(send(socket, bufall, namelen + strlen(bufmsg),0)<0)
-                            puts("Error : Write error on socket.");
-                    }
-                } else { // 게임대기중 (0)
-                    if(send(socket, bufall, namelen + strlen(bufmsg),0)<0)
-                        puts("Error : Write error on socket.");
-                }
-                if(strstr(bufmsg, EXIT_STRING) != NULL) {
-                    puts("Good bye.");
-                    close(socket);
-                    exit(0);
-                }
-                    
+        if (FD_ISSET(socket, &read_fds)) {
+            readDataFromServer(socket, bufmsg);
+            printf("bufmsg : %s", bufmsg);
+            processData(bufmsg);
+        } else if (FD_ISSET(0, &read_fds)) {
+            if (fgets(bufmsg, MAXLINE, stdin)) {
+                processKeyboardInput(socket, bufmsg);
             }
         }
     }
-    
-    
-    
-    
-    
-    
-    
 }
 
 //////////////////////
@@ -198,14 +112,10 @@ void waitInput(int socket, int maxfdp1, fd_set *read_fds) {
     }
 }
 
-char* readDataFromServer(int socket) {
-    char *bufmsg = NULL;
+void readDataFromServer(int socket, char *bufmsg) {
     long nByte = recv(socket, bufmsg, MAXLINE, 0);
     if (0 < nByte) {
         bufmsg[nByte] = 0;
-        return bufmsg;
-    } else {
-        return NULL;
     }
 }
 
@@ -224,8 +134,11 @@ void processData(char* data) {
     } else if(strstr(data, COMMAND_GAME_INFO) != NULL) {
         char *result[6] = { "" };
         parseData(result, data);
-        nowTurnNumber = atoi(result[2]);
-        gameState = atoi(result[3]);
+        
+        
+        
+        
+        
         processGameInfo(result);
         
         
@@ -248,8 +161,12 @@ void processGameInfo(char *result[]) {
     // TODO: result[0] : 카드배열 1: 카드상태(0,1,2) 2:턴정보(1,2) 3: 게임상태(0,1,2) 4:누가 몇개맞췄는지
     //게임상태:진행중, 턴정보:나 -> 카드상태에 따른 카드 배열 출력 -> 입력
     //게임상태:진행중, 턴정보:상대방 -> 입력불가(전송안함)
-    if (!strcmp(result[2], "1")) {
-        if (!strcmp(result[2], myTurnNumber)) {
+    
+    nowTurnNumber = atoi(result[2]);
+    gameState = atoi(result[3]);
+    
+    if (gameState == 1) { //진행중
+        if (myTurnNumber == nowTurnNumber) {
             printTable(result[0], result[1], result[4]);
             printf("좌표를 입력하세요 x1,y1,x2,y2 : ");
         }
@@ -275,6 +192,22 @@ void splitString(char *result[], char string[], char delimiter[]) {
         token = strtok(NULL, delimiter);
         i++;
     }
+}
+
+void processKeyboardInput(int socket, char *bufmsg) {
+    printf("your input is %s\n",bufmsg);
+    
+    if (gameState == 1) { //게임진행중 //좌표 입력
+        if (myTurnNumber == nowTurnNumber) {
+            if(send(socket, bufmsg, strlen(bufmsg), 0) < 0)
+                puts("Error : Write error on socket.");
+        }
+    } else { // 게임대기중 (0) start 전송
+        if(send(socket, bufmsg, strlen(bufmsg), 0) < 0)
+            puts("Error : Write error on socket.");
+
+    }
+
 }
 
 //////////////////////
