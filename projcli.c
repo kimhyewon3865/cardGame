@@ -19,9 +19,11 @@ void gotoxy(int x,int y);
 void printTable();
 char * inputPoint();
 void makeCardTable();
+void overTurn(char *);
 
-char result[16] = {'a','a','b','b','c','c','d','d','e','e','f','f','g','g','h','h'};
+char *result;
 int cardState[16] = {0};
+char *EXIT_STRING = "exit";
 
 int main(int argc, char * argv[]) {
 	char bufall[MAXLINE + NAME_LEN], *bufmsg;
@@ -61,23 +63,29 @@ int main(int argc, char * argv[]) {
 			int nbyte;
 			if( (nbyte = recv(s, bufmsg, MAXLINE, 0)) > 0) {
 				bufmsg[nbyte] = 0;
+				if(strstr(buf, GAME_STARAT_STRING) != NULL) {
+					result = bufmsg;
+					printTable();
+				} else {
+					overTurn(bufmsg);
+				}		
 				printf("%s \n", bufmsg);
 			}
 		}
 
 		if(FD_ISSET(0, &read_fds)) {
+			printf("x1, y1, x2, y2 입력:\n");
 			if(fgets(bufmsg, MAXLINE, stdin)) {
-			//bufmsg = inputPoint();
 				if(send(s, bufall, namelen+strlen(bufmsg),0)<0)
 					puts("Error : Write error on socket.");
-				// if(strstr(bufmsg, EXIT_STRING) != NULL) {
-				// 	puts("Good bye.");
-				// 	close(s);
-				// 	exit(0);
-				// }
+				if(strstr(bufmsg, EXIT_STRING) != NULL) {
+					puts("Good bye.");
+					close(s);
+					exit(0);
+				}
 			}
 		}
-	}//end of while
+	}
 
 }
 
@@ -105,9 +113,9 @@ void makeCardTable() {
 void printTable() {
 	int i, j = 3, k = 20;
 
-	for (int i = 0; i < 16; ++i)
+	for (i = 0; i < 16; ++i)
 	{
-		gotoxy(j,k); //reposition cursor
+		gotoxy(j,k); 
 		if(cardState[i] != 0) {
 			printf("%c",result[i]);
 		} else {
@@ -146,7 +154,6 @@ char * inputPoint() {
 int tcp_connect(int af, char *servip, unsigned short port) {
 	struct sockaddr_in servaddr; 
 	int s;
-	//소켓 생성
 	if( (s = socket(af, SOCK_STREAM, 0)) < 0 )
 		return -1;
 
@@ -159,4 +166,22 @@ int tcp_connect(int af, char *servip, unsigned short port) {
 		return -1;
 
 	return s;
+}
+
+void overTurn(char *point) {
+	char * token = NULL;
+ 	char *s1 = *point;
+ 	char s2[] = ", ";
+ 	int pointArray[10];
+ 	int i=0,j;
+ 	token = strtok(s1,s2);
+	 while(token!=NULL)
+	 {
+		pointArray[i++] = atoi(token);
+		printf("token = %s\n",token);
+	  	token = strtok(NULL, s2);
+
+	 }
+	 for(j=0; j<i; i++)
+	 	printf("%d\n",pointArray);
 }

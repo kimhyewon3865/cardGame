@@ -1,4 +1,4 @@
- #include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -34,7 +34,7 @@ void makeCardTable();
 
 int main(int argc, char *argv[]) {
 	struct sockaddr_in cliaddr;
-	char buf[MAXLINE+1];
+	char buf[MAXLINE + 1];
 	int i,j, nbyte, accp_sock, addrlen = sizeof(struct sockaddr_in);
 	fd_set read_fds;
 
@@ -43,7 +43,6 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 
-	//tcp_listen(host,port,backlog)함수호출
 	listen_sock = tcp_listen(INADDR_ANY, atoi(argv[1]), 2);
 	maxfdp1 = getmax() + 1; 
 
@@ -69,7 +68,6 @@ int main(int argc, char *argv[]) {
 			send(accp_sock, START_STRING, strlen(START_STRING), 0);
 			printf("%d번째 사용자 추가\n",num_chat);
 		}
-		//클라이언트가 보낸 메시지를 모든 클라이언트에게 방송
 		for(i = 0; i < num_chat; i++){
 			if(FD_SET(clisock_list[i], &read_fds)) {
 				nbyte = recv(clisock_list[i], buf, MAXLINE, 0);
@@ -80,30 +78,25 @@ int main(int argc, char *argv[]) {
 				}
 
 				buf[nbyte] = 0;
-				//종료문자 처리
 				if(strstr(buf, EXIT_STRING) != NULL) {
 					removeClient(i);
 					continue;
 				}
-				//게임시작 처리
 				if(strstr(buf, GAME_STARAT_STRING) != NULL) {
-					//랜덤돌리기
-					makeCardTable()
-					printf("%s\n",result);
-					//랜덤 방송
+					makeCardTable();
+					//strcat(result,"start");
 					send(clisock_list[j], result, sizeof(result), 0);
 					continue;
 				}
 
 
-				//모든 채팅 참가자에게 메시지 방송
 				for(j = 0; j < num_chat; j++)
 					send(clisock_list[j], buf,nbyte,0);
 
 				printf("%s\n",buf);
 			}
 		}
-	}//end of while
+	}
 	return 0;
 }
 
