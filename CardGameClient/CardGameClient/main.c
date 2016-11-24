@@ -31,6 +31,11 @@ char* readDataFromServer(int socket);
 void processData(char*);
 void parseData(char **result, char *data);
 void splitString(char *result[], char string[], char delimiter[]);
+void processGameInfo(char *result[]);
+
+int myTurnNumber = 0;
+int nowTurnNumber = 0;
+int gameState = 0;
 
 /////////////////////////
 
@@ -41,7 +46,7 @@ int tcp_connect(int af, char *servip, unsigned short port);
 void errquit(char *mesg) { perror(mesg); exit(1); }
 
 void gotoxy(int x,int y);
-void printTable();
+void printTable(char* cardArray, char *cardState, char *correctState);
 char * inputPoint();
 void makeCardTable();
 void overTurn(char *);
@@ -56,8 +61,8 @@ const char *GAME_STARAT_STRING = "start";
 
 
 int main(int argc, char * argv[]) {
-    // char bufall[MAXLINE + NAME_LEN];//, *bufmsg;
-    int maxfdp1, socket; //, namelen;
+     char bufall[MAXLINE + NAME_LEN], *bufmsg;
+    int maxfdp1, socket, namelen;
     fd_set read_fds;
     
 //    if(argc != 4) {
@@ -69,6 +74,13 @@ int main(int argc, char * argv[]) {
     argv[2] = "80";
     argv[3] = "뿅알";
     
+    sprintf(bufall, "[%s] : ", argv[3]);
+    
+    namelen = strlen(bufall);
+    
+    bufmsg = bufall + namelen;
+
+    
     // open socket
     socket = tcp_connect(AF_INET, argv[1], atoi(argv[2]));
     if(socket == -1) {
@@ -78,30 +90,30 @@ int main(int argc, char * argv[]) {
     maxfdp1 = socket + 1;
     FD_ZERO(&read_fds);
     
-    while (1) {
-        
-        //printf("wait...");
-        
-        waitInput(socket, maxfdp1, &read_fds);
-        
-        if (FD_ISSET(socket, &read_fds)) {
-            char *dataFromServer = readDataFromServer(socket);
-            if (dataFromServer != NULL) {
-                printf("data: %s\n", dataFromServer);
-                processData(dataFromServer);
-            }
-            
-        } else if (FD_ISSET(0, &read_fds)) {
-            char *bufmsg;
-            if (fgets(bufmsg, MAXLINE, stdin)) {
-                printf("your input is %s\n",bufmsg);
-            }
-            
-            
-            
-            // TODO: processKeyboardInput()
-        }
-    }
+//    while (1) {
+//        
+//        //printf("wait...");
+//        
+//        waitInput(socket, maxfdp1, &read_fds);
+//        
+//        if (FD_ISSET(socket, &read_fds)) {
+//            char *dataFromServer = readDataFromServer(socket);
+//            if (dataFromServer != NULL) {
+//                printf("data: %s\n", dataFromServer);
+//                processData(dataFromServer);
+//            }
+//            
+//        } else if (FD_ISSET(0, &read_fds)) {
+//            char *bufmsg;
+//            if (fgets(bufmsg, MAXLINE, stdin)) {
+//                printf("your input is %s\n",bufmsg);
+//            }
+//            
+//            
+//            
+//            // TODO: processKeyboardInput()
+//        }
+//    }
     
     
     
@@ -125,38 +137,48 @@ int main(int argc, char * argv[]) {
 //    maxfdp1 = socket + 1;
 //    FD_ZERO(&read_fds);
     
-//    while(1) {
-//        
-////        FD_SET(0, &read_fds);
-////        FD_SET(socket, &read_fds);
-//
-////        if(select(maxfdp1, &read_fds, NULL, NULL, NULL) < 0 ) {
-////            errquit("select fail");
-////        }
-//        
-//        if(FD_ISSET(socket, &read_fds)) {
-//            int nbyte;
-//            if( (nbyte = recv(socket, bufmsg, MAXLINE, 0)) > 0) {
-//                bufmsg[nbyte] = 0;
-//                result = bufmsg;
-//                printTable();
-//                printf("%s \n", bufmsg);
-//            }
-//        }
-//        
-//        if(FD_ISSET(0, &read_fds)) {
-//            printf("x1, y1, x2, y2 입력:\n");
-//            if(fgets(bufmsg, MAXLINE, stdin)) {
-//                if(send(socket, bufall, namelen + strlen(bufmsg),0)<0)
-//                puts("Error : Write error on socket.");
-//                if(strstr(bufmsg, EXIT_STRING) != NULL) {
-//                    puts("Good bye.");
-//                    close(socket);
-//                    exit(0);
-//                }
-//            }
-//        }
-//    }
+    while(1) {
+        
+        FD_SET(0, &read_fds);
+        FD_SET(socket, &read_fds);
+
+        if(select(maxfdp1, &read_fds, NULL, NULL, NULL) < 0 ) {
+            errquit("select fail");
+        }
+        
+        if(FD_ISSET(socket, &read_fds)) {
+            int nbyte;
+            if( (nbyte = recv(socket, bufmsg, MAXLINE, 0)) > 0) {
+                bufmsg[nbyte] = 0;
+                result = bufmsg;
+                //printTable();
+                processData(bufmsg);
+
+                printf("%s \n", bufmsg);
+            }
+        }
+        
+        if(FD_ISSET(0, &read_fds)) {
+            printf("x1, y1, x2, y2 입력:\n");
+            if(fgets(bufmsg, MAXLINE, stdin)) {
+                if (gameState == 1) { //게임진행중
+                    if (myTurnNumber == nowTurnNumber) {
+                        if(send(socket, bufall, namelen + strlen(bufmsg),0)<0)
+                            puts("Error : Write error on socket.");
+                    }
+                } else { // 게임대기중 (0)
+                    if(send(socket, bufall, namelen + strlen(bufmsg),0)<0)
+                        puts("Error : Write error on socket.");
+                }
+                if(strstr(bufmsg, EXIT_STRING) != NULL) {
+                    puts("Good bye.");
+                    close(socket);
+                    exit(0);
+                }
+                    
+            }
+        }
+    }
     
     
     
@@ -188,18 +210,49 @@ char* readDataFromServer(int socket) {
 }
 
 void processData(char* data) {
+//    char *myTurnNumber = "";
+    
     if (strstr(data, COMMAND_CONNECT) != NULL) {
         char *result[1] = { "" };
         parseData(result, data);
-        // TODO: processConnect(result);
+        myTurnNumber = atoi(result[0]);
+        
+        
+        
+        
+        // TODO: myTrumNumber = processConnect(result);
     } else if(strstr(data, COMMAND_GAME_INFO) != NULL) {
         char *result[6] = { "" };
         parseData(result, data);
-        // TODO: processGameInfo(result);
+        nowTurnNumber = atoi(result[2]);
+        gameState = atoi(result[3]);
+        processGameInfo(result);
+        
+        
+        
+        // TODO: processGameInfo(result, *myTurnNumber);
     } else if(strstr(data, COMMAND_FINISH) != NULL) {
-        char *result[1] = { "" };
+        char *result[2] = { "" }; //누가이겻나, 누가몇개맞췄나
         parseData(result, data);
+        
+        exit(1);
+        
+        
         // TODO: processFinish(result);
+    }
+    //printf("sizeof(result) : %d\n", sizeof(result));
+    
+}
+
+void processGameInfo(char *result[]) {
+    // TODO: result[0] : 카드배열 1: 카드상태(0,1,2) 2:턴정보(1,2) 3: 게임상태(0,1,2) 4:누가 몇개맞췄는지
+    //게임상태:진행중, 턴정보:나 -> 카드상태에 따른 카드 배열 출력 -> 입력
+    //게임상태:진행중, 턴정보:상대방 -> 입력불가(전송안함)
+    if (!strcmp(result[2], "1")) {
+        if (!strcmp(result[2], myTurnNumber)) {
+            printTable(result[0], result[1], result[4]);
+            printf("좌표를 입력하세요 x1,y1,x2,y2 : ");
+        }
     }
 }
 
@@ -247,7 +300,7 @@ void makeCardTable() {
 }
 
 
-void printTable() {
+void printTable(char *cardArray, char *cardState, char *correctState) {
     int i, j = 3, k = 20;
     
     for (i = 0; i < 16; ++i)
@@ -266,6 +319,7 @@ void printTable() {
             j= 3;
         }
     }
+    printf("%s\n",correctState);
 }
 
 char * inputPoint() {
