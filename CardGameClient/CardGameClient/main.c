@@ -33,6 +33,7 @@ void parseData(char **result, char *data);
 void splitString(char *result[], char string[], char delimiter[]);
 void processGameInfo(char *result[]);
 void processKeyboardInput(int, char *);
+void makeCommandString(char *bufmsg, char *command, char *bufall);
 
 int myTurnNumber = 0;
 int nowTurnNumber = 0;
@@ -41,15 +42,14 @@ char *command = "/";
 
 /////////////////////////
 
-#define MAXLINE 511
+#define MAXLINE 1024
 #define NAME_LEN 20
 
 int tcp_connect(int af, char *servip, unsigned short port);
 void errquit(char *mesg) { perror(mesg); exit(1); }
 
 void gotoxy(int x,int y);
-void printTable(char* cardArray, char *cardState, char *correctState);
-char * inputPoint();
+void printTable(char *cardArray, char *cardState, int correctState1, int correctState2);
 void makeCardTable();
 void overTurn(char *);
 
@@ -67,32 +67,36 @@ int main(int argc, char * argv[]) {
     int maxfdp1, socket;
     fd_set read_fds;
     
-//    if(argc != 4) {
-//        printf("사용법: %s  server_ip port name \n", argv[0]);
-//        exit(0);
-//    }
+    //    if(argc != 4) {
+    //        printf("사용법: %s  server_ip port name \n", argv[0]);
+    //        exit(0);
+    //    }
     
     // set server info
-    argv[1] = "125.209.199.157";
+//    argv[1] = "125.209.199.157";
+    argv[1] = "117.17.142.201";
+
     argv[2] = "80";
+    
     argv[3] = "뿅알";
     
     // open socket
     socket = tcp_connect(AF_INET, argv[1], atoi(argv[2]));
     if(socket == -1) {
-        errquit("서버 접속에 실패했습니다.");
+        errquit("==========\n서버 접속에 실패했습니다.\n==========\n");
     }
-    puts("서버에 접속되었습니다.");
+    puts("==========\n서버에 접속되었습니다.\n==========\n");
     maxfdp1 = socket + 1;
-    FD_ZERO(&read_fds);
+    //    FD_ZERO(&read_fds);
     
     // communicate with server
     while (1) {
+        FD_ZERO(&read_fds);
         waitInput(socket, maxfdp1, &read_fds);
         
         if (FD_ISSET(socket, &read_fds)) {
             readDataFromServer(socket, bufmsg);
-            printf("bufmsg : %s", bufmsg);
+            printf("read: %s\n", bufmsg);
             processData(bufmsg);
         } else if (FD_ISSET(0, &read_fds)) {
             if (fgets(bufmsg, MAXLINE, stdin)) {
@@ -108,7 +112,7 @@ void waitInput(int socket, int maxfdp1, fd_set *read_fds) {
     FD_SET(0, read_fds);
     FD_SET(socket, read_fds);
     if(select(maxfdp1, read_fds, NULL, NULL, NULL) < 0 ) {
-        errquit("select fail");
+        errquit("==========\nselect fail\n==========\n");
     }
 }
 
@@ -120,30 +124,19 @@ void readDataFromServer(int socket, char *bufmsg) {
 }
 
 void processData(char* data) {
-//    char *myTurnNumber = "";
+    //    char *myTurnNumber = "";
     
     if (strstr(data, COMMAND_CONNECT) != NULL) {
         char *result[1] = { "" };
         parseData(result, data);
         myTurnNumber = atoi(result[0]);
-        
-        
-        
-        
-        // TODO: myTrumNumber = processConnect(result);
+
     } else if(strstr(data, COMMAND_GAME_INFO) != NULL) {
         char *result[6] = { "" };
         parseData(result, data);
-        
-        
-        
-        
-        
+
         processGameInfo(result);
-        
-        
-        
-        // TODO: processGameInfo(result, *myTurnNumber);
+
     } else if(strstr(data, COMMAND_FINISH) != NULL) {
         char *result[2] = { "" }; //누가이겻나, 누가몇개맞췄나
         parseData(result, data);
@@ -153,23 +146,23 @@ void processData(char* data) {
         
         // TODO: processFinish(result);
     }
-    //printf("sizeof(result) : %d\n", sizeof(result));
     
 }
 
 void processGameInfo(char *result[]) {
-    // TODO: result[0] : 카드배열 1: 카드상태(0,1,2) 2:턴정보(1,2) 3: 게임상태(0,1,2) 4:누가 몇개맞췄는지
+    // TODO: result[0] : 카드배열 1: 카드상태(0,1,2) 2:턴정보(1,2) 3: 게임상태(0,1,2) 4:첫번째사용자 맞춘수 5:두번째사용자 맞춘수
     //게임상태:진행중, 턴정보:나 -> 카드상태에 따른 카드 배열 출력 -> 입력
     //게임상태:진행중, 턴정보:상대방 -> 입력불가(전송안함)
     
     nowTurnNumber = atoi(result[2]);
     gameState = atoi(result[3]);
     
+    
     if (gameState == 1) { //진행중
-        if (myTurnNumber == nowTurnNumber) {
-            printTable(result[0], result[1], result[4]);
-            printf("좌표를 입력하세요 x1,y1,x2,y2 : ");
-        }
+        printTable(result[0], result[1], atoi(result[4]), atoi(result[5]));
+//        if (myTurnNumber == nowTurnNumber) {
+//            printf("좌표를 입력하세요 x1,y1,x2,y2 : ");
+//        }
     }
 }
 
@@ -195,19 +188,35 @@ void splitString(char *result[], char string[], char delimiter[]) {
 }
 
 void processKeyboardInput(int socket, char *bufmsg) {
-    printf("your input is %s\n",bufmsg);
+    //    printf("your input is %s\n",bufmsg);
     
     if (gameState == 1) { //게임진행중 //좌표 입력
         if (myTurnNumber == nowTurnNumber) {
-            if(send(socket, bufmsg, strlen(bufmsg), 0) < 0)
+            char bufall[1024];
+            makeCommandString(bufmsg, "select", bufall);
+            //            printf("your bufall is %s",bufall);
+            if(send(socket, bufall, strlen(bufall), 0) < 0)
+                //if(send(socket, bufmsg, strlen(bufmsg), 0) < 0)
                 puts("Error : Write error on socket.");
         }
     } else { // 게임대기중 (0) start 전송
+        //        char bufall[1024];
+        //        makeCommandString(bufmsg, "start", bufall);
+        //        if(send(socket, "start", strlen("start"), 0) < 0)
         if(send(socket, bufmsg, strlen(bufmsg), 0) < 0)
             puts("Error : Write error on socket.");
-
+        
     }
+}
 
+void makeCommandString(char *bufmsg, char *command, char *bufall) {
+    int namelen;
+    sprintf(bufall, "%s:", command);
+    namelen = strlen(bufall);
+    //bufmsg = bufall + namelen;
+    //    printf("makeCommandString bufmsg: %s\n",bufmsg);
+    strcat(bufall, bufmsg);
+    //    printf("makeCommandString bufall: %s\n",bufall);
 }
 
 //////////////////////
@@ -233,53 +242,31 @@ void makeCardTable() {
 }
 
 
-void printTable(char *cardArray, char *cardState, char *correctState) {
-    int i, j = 3, k = 20;
-    
-    for (i = 0; i < 16; ++i)
-    {
-//        gotoxy(j,k);
-        // if(cardState[i] != 0) {
-        // 	printf("%c",result[i]);
-        // } else {
-        // 	printf("?");
-        // }
-        printf("%c",result[i]);
-        j = j + 2;
-        if ((i+1)%4 == 0) {
-            printf("\n");
-            k = k + 2;
-            j= 3;
-        }
+void printTable(char *cardArray, char *cardState, int correctState1, int correctState2) {
+    int x = 0, y = 0;
+    if (nowTurnNumber == myTurnNumber) {
+        printf("내차례\n");
+    } else {
+        printf("상대방차례\n");
     }
-    printf("%s\n",correctState);
-}
-
-char * inputPoint() {
-    char *bufmsg;
-    int x1,y1,x2,y2;
-    gotoxy(2,30);
-    printf("첫번째카드 x 입력 : ");
-    scanf("%d",&x1);
-    *bufmsg = x1;
-    printf("첫번째카드 y 입력 : ");
-    scanf("%d",&y1);
-    *bufmsg += y1;
-    printf("두번째카드 x 입력 : ");
-    scanf("%d",&x2);
-    *bufmsg += x2;
-    printf("두번째카드 x 입력 : ");
-    scanf("%d",&y2);
-    *bufmsg += y2;
     
-    return bufmsg;
+    for (y = 0; y < 4; y++) {
+        for (x = 0; x < 4; x++) {
+            if (cardState[x + y * 4] != '0') {
+                printf("%c ", cardArray[x + y * 4]);
+            } else {
+                printf("? ");
+            }
+        }
+        printf("\n");
+    }
 }
 
 int tcp_connect(int af, char *servip, unsigned short port) {
     struct sockaddr_in servaddr;
     int s;
     if( (s = socket(af, SOCK_STREAM, 0)) < 0 )
-    return -1;
+        return -1;
     
     bzero( (char *)&servaddr, sizeof(servaddr));
     servaddr.sin_family = af;
@@ -287,7 +274,7 @@ int tcp_connect(int af, char *servip, unsigned short port) {
     servaddr.sin_port = htons(port);
     
     if(connect(s, (struct sockaddr *)&servaddr, sizeof(servaddr))<0)
-    return -1;
+        return -1;
     
     return s;
 }
@@ -305,7 +292,7 @@ int tcp_connect(int af, char *servip, unsigned short port) {
 //        pointArray[i++] = atoi(token);
 //        printf("token = %s\n",token);
 //        token = strtok(NULL, s2);
-//        
+//
 //    }
 //    for(j=0; j<i; i++)
 //    printf("%d\n",pointArray);

@@ -24,6 +24,7 @@ void overTurn(char *);
 char *result;
 int cardState[16] = {0};
 char *EXIT_STRING = "exit";
+char *GAME_STARAT_STRING = "start";
 
 int main(int argc, char * argv[]) {
 	char bufall[MAXLINE + NAME_LEN], *bufmsg;
@@ -63,12 +64,8 @@ int main(int argc, char * argv[]) {
 			int nbyte;
 			if( (nbyte = recv(s, bufmsg, MAXLINE, 0)) > 0) {
 				bufmsg[nbyte] = 0;
-				if(strstr(buf, GAME_STARAT_STRING) != NULL) {
-					result = bufmsg;
-					printTable();
-				} else {
-					overTurn(bufmsg);
-				}		
+				result = bufmsg;
+				printTable();
 				printf("%s \n", bufmsg);
 			}
 		}
@@ -116,18 +113,18 @@ void printTable() {
 	for (i = 0; i < 16; ++i)
 	{
 		gotoxy(j,k); 
-		if(cardState[i] != 0) {
-			printf("%c",result[i]);
-		} else {
-			printf("?");
-		}	
-			j = j + 2;
-			if ((i+1)%4 == 0)
-			{
-				printf("\n");
-				k = k + 2;
-				j= 3;
-			}
+		// if(cardState[i] != 0) {
+		// 	printf("%c",result[i]);
+		// } else {
+		// 	printf("?");
+		// }	
+		printf("%c",result[i]);
+		j = j + 2;
+		if ((i+1)%4 == 0) {
+			printf("\n");
+			k = k + 2;
+			j= 3;
+		}
 	}
 }
 
@@ -170,10 +167,11 @@ int tcp_connect(int af, char *servip, unsigned short port) {
 
 void overTurn(char *point) {
 	char * token = NULL;
- 	char *s1 = *point;
+ 	char *s1;
  	char s2[] = ", ";
  	int pointArray[10];
  	int i=0,j;
+ 	*s1 = *point;
  	token = strtok(s1,s2);
 	 while(token!=NULL)
 	 {
